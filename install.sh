@@ -225,35 +225,46 @@ main() {
 
     # A plain `ayg` must be this one, from any directory and in a terminal that ran another
     # before: another on PATH (a checkout's, linked into ~/.local/bin by its build) runs a
-    # robot's command on this machine. So PATH is read entry by entry, not asked of a shell:
-    # this one counts where an entry written from the root reaches it (one written from
-    # where this was run names another directory from anywhere else), and another `ayg`
-    # anywhere on PATH is said, before this one or after it (a terminal remembers the one
-    # it ran). What is suggested is the whole path, first.
+    # robot's command on this machine. So PATH is read entry by entry, not asked of a shell,
+    # and nothing is said only when nothing else can be found: this one reached through an
+    # entry written from the root, no other `ayg` anywhere on PATH (before this one or after
+    # it: a terminal remembers the one it ran), and no entry that is not written from the
+    # root (an empty one, the last after a colon too, `.`, `./bin`: each names another
+    # directory from anywhere else). What is suggested is the whole path, first, which
+    # settles every one of these.
     ours=""
     other=""
-    old_ifs=$IFS
-    IFS=:
-    set -f
-    for entry in $PATH; do
-        [ -n "$entry" ] || entry=.
+    loose=""
+    rest="$PATH:"
+    while [ -n "$rest" ]; do
+        entry=${rest%%:*}
+        rest=${rest#*:}
+        case "$entry" in
+            /*) ;;
+            *)
+                loose=yes
+                [ -n "$entry" ] || entry=.
+                ;;
+        esac
         if [ -f "$entry/ayg" ] && [ -x "$entry/ayg" ]; then
-            if [ "$entry/ayg" -ef "$dest/ayg" ]; then
+            if [ ! "$entry/ayg" -ef "$dest/ayg" ]; then
+                [ -n "$other" ] || other="$entry/ayg"
+            else
                 case "$entry" in
                     /*) ours=yes ;;
                 esac
-            elif [ -z "$other" ]; then
-                other="$entry/ayg"
             fi
         fi
     done
-    set +f
-    IFS=$old_ifs
-    if [ -n "$other" ]; then
-        echo "  NOTE: another ayg is on your PATH: $other"
-        echo "  A plain \`ayg\` must be the one just installed: a terminal runs the first on its"
-        echo "  PATH, and remembers one it ran before. Put this directory first, in this terminal"
-        echo "  and in ~/.profile or ~/.zshrc, or take the other one away:"
+    if [ -n "$other" ] || [ -n "$loose" ]; then
+        if [ -n "$other" ]; then
+            echo "  NOTE: another ayg is on your PATH: $other"
+        else
+            echo "  NOTE: your PATH has an entry that is not a whole path (\`.\`, or an empty one)."
+        fi
+        echo "  A plain \`ayg\` must be the one just installed: a terminal runs the first it finds,"
+        echo "  and remembers one it ran before. Put this directory first, in this terminal and"
+        echo "  in ~/.profile or ~/.zshrc:"
         echo "    export PATH=\"$dest:\$PATH\""
     elif [ -z "$ours" ]; then
         echo "  $dest is not on your PATH: add it (in ~/.profile or ~/.zshrc):"
