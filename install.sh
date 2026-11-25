@@ -43,6 +43,43 @@ main() {
         esac
     done
 
+    # Where an `ayg` lies says what it is. One under an Ayg checkout is that checkout's
+    # (built there, by `ayg launcher build`), one beside what cargo builds is a build, one in
+    # a release's directory is the release's: each runs a robot's command for the tree it is
+    # part of. An installed `ayg` is a file of its own, and is put nowhere else.
+    part_of() {
+        echo "$bin is $1:" >&2
+        echo "an ayg put there would be taken for a part of it, not for an installed one." >&2
+        echo "Choose another directory (the default is ~/.local/bin). Nothing was installed." >&2
+        exit 1
+    }
+    # The directory as it resolves: the part of it that is there, and what is yet to be made
+    # below that (which holds nothing).
+    at="$bin"
+    rest=""
+    while [ ! -d "$at" ]; do
+        up=$(dirname "$at")
+        [ "$up" != "$at" ] || break
+        rest="/$(basename "$at")$rest"
+        at="$up"
+    done
+    at=$(cd "$at" 2>/dev/null && pwd -P) || at=""
+    if [ -e "$bin/.cargo-lock" ] || [ -d "$bin/.fingerprint" ]; then
+        part_of "a directory cargo builds into"
+    fi
+    case "$at$rest" in
+        */releases/*[!0-9]*) ;;
+        */releases/?*) part_of "a release's directory" ;;
+    esac
+    if [ -e "$bin/release.json" ]; then
+        part_of "a release's directory"
+    fi
+    while [ -n "$at" ]; do
+        [ ! -f "$at/ros/Makefile" ] || part_of "inside the Ayg checkout at $at"
+        [ "$at" != "/" ] || break
+        at=$(dirname "$at")
+    done
+
     case "$(uname -s) $(uname -m)" in
         "Linux x86_64") file=ayg-linux-x86_64 ;;
         "Linux aarch64" | "Linux arm64") file=ayg-linux-aarch64 ;;
