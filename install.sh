@@ -53,10 +53,13 @@ main() {
         echo "reaches them. Install it (https://cli.github.com), then: gh auth login" >&2
         exit 1
     fi
-    if ! gh auth status >/dev/null 2>&1; then
-        echo "Log in first, with the account that was given access:  gh auth login" >&2
+    # What gh says when it is asked for a release is the answer: a check of the login ahead
+    # of that can fail over an account this has nothing to do with.
+    no_access() {
+        echo "$repo could not be read. Log in with the account that was given access" >&2
+        echo "(gh auth login), or ask for that access. Nothing was installed." >&2
         exit 1
-    fi
+    }
 
     # A release is tagged ayg-<n>; a pre-release is a candidate.
     newest() {
@@ -67,9 +70,9 @@ main() {
     }
     if [ -z "$tag" ]; then
         if $candidate; then
-            tag=$(newest "true")
+            tag=$(newest "true") || no_access
         else
-            tag=$(newest ".isPrerelease | not")
+            tag=$(newest ".isPrerelease | not") || no_access
         fi
         if [ -z "$tag" ]; then
             if $candidate; then
@@ -102,13 +105,22 @@ main() {
         exit 1
     fi
 
-    # Put beside its place first, then moved into it: an `ayg` that is running is never half
-    # replaced.
+    # Put beside its place under a name of its own, seen to start on this machine, and only
+    # then moved into its place: the `ayg` that is there is never half replaced, and never
+    # replaced by one that does not run here.
     mkdir -p "$bin"
-    cp "$tmp/$file" "$bin/.ayg.new"
-    chmod 755 "$bin/.ayg.new"
-    mv -f "$bin/.ayg.new" "$bin/ayg"
-    echo "✓ $("$bin/ayg" --version) (${tag}) is at $bin/ayg"
+    new=$(mktemp "$bin/.ayg.XXXXXX")
+    trap 'rm -rf "$tmp" "$new"' EXIT
+    cp "$tmp/$file" "$new"
+    chmod 755 "$new"
+    if ! version=$("$new" --version 2>&1); then
+        echo "The ayg that was fetched does not start on this machine:" >&2
+        echo "  $version" >&2
+        echo "Nothing was installed: what was at $bin/ayg is as it was." >&2
+        exit 1
+    fi
+    mv -f "$new" "$bin/ayg"
+    echo "✓ $version (${tag}) is at $bin/ayg"
 
     case ":$PATH:" in
         *":$bin:"*) ;;
@@ -120,4 +132,5 @@ main() {
     echo "  Next: ayg update <user@robot> installs the newest release on a robot."
 }
 
-main "$@"
+# In braces: a download cut anywhere in this line, too, runs nothing.
+{ main "$@"; }
