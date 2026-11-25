@@ -223,18 +223,39 @@ main() {
     mv -f "$new" "$dest/ayg"
     echo "✓ $version (${tag}) is at $dest/ayg"
 
-    # By its whole path, here and in what is suggested: a PATH entry written from where this
-    # was run would name another directory from anywhere else.
-    # What a plain `ayg` runs is the first one on PATH, and it must be this one: another
-    # before it (a checkout's, linked into ~/.local/bin by its build) would be the one the
-    # guide's commands reach, and that one runs a robot's command on this machine.
-    first=$(command -v ayg 2>/dev/null) || first=""
-    if [ -n "$first" ] && [ ! "$first" -ef "$dest/ayg" ]; then
-        echo "  NOTE: the ayg your shell finds first is another one: $first"
-        echo "  It is the one a plain \`ayg\` runs, not the one just installed. Put this first"
-        echo "  on your PATH (in ~/.profile or ~/.zshrc), or take the other one away:"
+    # A plain `ayg` must be this one, from any directory and in a terminal that ran another
+    # before: another on PATH (a checkout's, linked into ~/.local/bin by its build) runs a
+    # robot's command on this machine. So PATH is read entry by entry, not asked of a shell:
+    # this one counts where an entry written from the root reaches it (one written from
+    # where this was run names another directory from anywhere else), and another `ayg`
+    # anywhere on PATH is said, before this one or after it (a terminal remembers the one
+    # it ran). What is suggested is the whole path, first.
+    ours=""
+    other=""
+    old_ifs=$IFS
+    IFS=:
+    set -f
+    for entry in $PATH; do
+        [ -n "$entry" ] || entry=.
+        if [ -f "$entry/ayg" ] && [ -x "$entry/ayg" ]; then
+            if [ "$entry/ayg" -ef "$dest/ayg" ]; then
+                case "$entry" in
+                    /*) ours=yes ;;
+                esac
+            elif [ -z "$other" ]; then
+                other="$entry/ayg"
+            fi
+        fi
+    done
+    set +f
+    IFS=$old_ifs
+    if [ -n "$other" ]; then
+        echo "  NOTE: another ayg is on your PATH: $other"
+        echo "  A plain \`ayg\` must be the one just installed: a terminal runs the first on its"
+        echo "  PATH, and remembers one it ran before. Put this directory first, in this terminal"
+        echo "  and in ~/.profile or ~/.zshrc, or take the other one away:"
         echo "    export PATH=\"$dest:\$PATH\""
-    elif [ -z "$first" ]; then
+    elif [ -z "$ours" ]; then
         echo "  $dest is not on your PATH: add it (in ~/.profile or ~/.zshrc):"
         echo "    export PATH=\"$dest:\$PATH\""
     fi
