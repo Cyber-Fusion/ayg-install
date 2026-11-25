@@ -7,7 +7,8 @@
 # not given access.
 #
 #   --release <n>   the `ayg` of release n (default: of the newest promoted release)
-#   --candidate     of the newest candidate, if newer: for the lab's own laptops
+#   --candidate     of a candidate, a release nobody promoted yet: the newest of either
+#                   kind, or with --release the one named. For the lab's own laptops
 #
 # Run again to replace the `ayg` that is installed with a newer one.
 set -eu
@@ -15,7 +16,11 @@ set -eu
 # All of it in one function, called on the last line: a download that was cut short runs
 # nothing.
 main() {
-    repo="${AYG_DIST_REPO:-Cyber-Fusion/ayg-dist}"
+    # The distribution repo, on GitHub itself whatever other host this machine's gh knows.
+    repo="${AYG_DIST_REPO:-github.com/Cyber-Fusion/ayg-dist}"
+    if [ -n "${AYG_DIST_REPO:-}" ]; then
+        echo "• AYG_DIST_REPO is set: ayg is taken from $repo, not from the distribution repo." >&2
+    fi
     bin="${AYG_INSTALL_DIR:-$HOME/.local/bin}"
     tag=""
     candidate=false
@@ -23,6 +28,9 @@ main() {
         case "$1" in
             --release)
                 [ $# -ge 2 ] || { echo "install.sh: --release takes a number" >&2; exit 2; }
+                case "$2" in
+                    "" | *[!0-9]*) echo "install.sh: --release takes a number" >&2; exit 2 ;;
+                esac
                 tag="ayg-$2"
                 shift 2
                 ;;
@@ -82,6 +90,29 @@ main() {
             fi
             exit 1
         fi
+    else
+        # A release that is named is asked what it is: a candidate is taken only when one
+        # is asked for, as `ayg update` takes it.
+        kind=$(gh release view "$tag" --repo "$repo" --json isDraft,isPrerelease \
+            --jq 'if .isDraft then "draft" elif .isPrerelease then "candidate" else "release" end') || {
+            echo "${tag} could not be read from $repo: is there such a release, and was the" >&2
+            echo "account you are logged in with given access? Nothing was installed." >&2
+            exit 1
+        }
+        case "$kind" in
+            release) ;;
+            candidate)
+                if ! $candidate; then
+                    echo "${tag} is a candidate, not promoted yet: it is taken only with" >&2
+                    echo "--candidate, for the lab's own laptops. Nothing was installed." >&2
+                    exit 1
+                fi
+                ;;
+            *)
+                echo "$repo holds no ${tag}. Nothing was installed." >&2
+                exit 1
+                ;;
+        esac
     fi
 
     tmp=$(mktemp -d)
