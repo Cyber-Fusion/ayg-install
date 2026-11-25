@@ -63,7 +63,7 @@ main() {
 
     # A release is tagged ayg-<n>; a pre-release is a candidate.
     newest() {
-        gh release list --repo "$repo" --limit 100 --json tagName,isDraft,isPrerelease \
+        gh release list --repo "$repo" --limit 10000 --json tagName,isDraft,isPrerelease \
             --jq "[.[] | select(.isDraft | not) | select($1) | .tagName
                    | select(test(\"^ayg-[0-9]+\$\"))]
                   | sort_by(ltrimstr(\"ayg-\") | tonumber) | last // empty"
