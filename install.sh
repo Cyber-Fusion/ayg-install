@@ -129,7 +129,7 @@ main() {
             echo "    export PATH=\"$bin:\$PATH\""
             ;;
     esac
-    echo "  Next: ayg update <user@robot> installs the newest release on a robot."
+    echo "  Next: \`ayg docs\` is the guide: aiming ayg at your robot, updating it, going back."
 }
 
 # In braces: a download cut anywhere in this line, too, runs nothing.
