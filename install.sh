@@ -91,7 +91,10 @@ main() {
     fi
     # A release's, as `ayg` itself tells one: a numbered directory in one named `releases`,
     # or a directory that holds a release's manifest.
-    case "$(basename "$dest")" in
+    # (A number may be written with a sign before it, and is one to `ayg` then too.)
+    numbered=$(basename "$dest")
+    numbered=${numbered#+}
+    case "$numbered" in
         "" | *[!0-9]*) ;;
         *) [ "$(basename "$(dirname "$dest")")" != releases ] || part_of "a release's directory" ;;
     esac
@@ -222,13 +225,19 @@ main() {
 
     # By its whole path, here and in what is suggested: a PATH entry written from where this
     # was run would name another directory from anywhere else.
-    case ":$PATH:" in
-        *":$dest:"* | *":$bin:"*) ;;
-        *)
-            echo "  $dest is not on your PATH: add it (in ~/.profile or ~/.zshrc):"
-            echo "    export PATH=\"$dest:\$PATH\""
-            ;;
-    esac
+    # What a plain `ayg` runs is the first one on PATH, and it must be this one: another
+    # before it (a checkout's, linked into ~/.local/bin by its build) would be the one the
+    # guide's commands reach, and that one runs a robot's command on this machine.
+    first=$(command -v ayg 2>/dev/null) || first=""
+    if [ -n "$first" ] && [ ! "$first" -ef "$dest/ayg" ]; then
+        echo "  NOTE: the ayg your shell finds first is another one: $first"
+        echo "  It is the one a plain \`ayg\` runs, not the one just installed. Put this first"
+        echo "  on your PATH (in ~/.profile or ~/.zshrc), or take the other one away:"
+        echo "    export PATH=\"$dest:\$PATH\""
+    elif [ -z "$first" ]; then
+        echo "  $dest is not on your PATH: add it (in ~/.profile or ~/.zshrc):"
+        echo "    export PATH=\"$dest:\$PATH\""
+    fi
     echo "  Next: \`ayg docs\` is the guide: aiming ayg at your robot, updating it, going back."
 }
 
