@@ -17,10 +17,8 @@ set -eu
 # nothing.
 main() {
     # The distribution repo, on GitHub itself whatever other host this machine's gh knows.
-    repo="${AYG_DIST_REPO:-github.com/Cyber-Fusion/ayg-dist}"
-    if [ -n "${AYG_DIST_REPO:-}" ]; then
-        echo "• AYG_DIST_REPO is set: ayg is taken from $repo, not from the distribution repo." >&2
-    fi
+    # No setting names another: whose releases a laptop takes is not left to its environment.
+    repo="github.com/Cyber-Fusion/ayg-dist"
     bin="${AYG_INSTALL_DIR:-$HOME/.local/bin}"
     tag=""
     candidate=false
