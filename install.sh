@@ -16,6 +16,8 @@ set -eu
 # All of it in one function, called on the last line: a download that was cut short runs
 # nothing.
 main() {
+    # A `cd` goes where it is told, by no search path of the caller's.
+    unset CDPATH
     # The distribution repo, on GitHub itself whatever other host this machine's gh knows.
     # No setting names another: whose releases a laptop takes is not left to its environment.
     repo="github.com/Cyber-Fusion/ayg-dist"
@@ -53,9 +55,15 @@ main() {
         echo "Choose another directory (the default is ~/.local/bin). Nothing was installed." >&2
         exit 1
     }
-    # The directory as it resolves: the part of it that is there, and what is yet to be made
-    # below that (which holds nothing).
-    at="$bin"
+    # One destination, found once, checked and then written to: by its whole path from the
+    # root, the part of it that is there as it resolves (links followed), and below that
+    # what is yet to be made, in plain names (a `..` there would lead out of what was
+    # checked).
+    case "$bin" in
+        /*) dest="$bin" ;;
+        *) dest="$(pwd -P)/$bin" ;;
+    esac
+    at="$dest"
     rest=""
     while [ ! -d "$at" ]; do
         up=$(dirname "$at")
@@ -63,18 +71,29 @@ main() {
         rest="/$(basename "$at")$rest"
         at="$up"
     done
-    at=$(cd "$at" 2>/dev/null && pwd -P) || at=""
-    if [ -e "$bin/.cargo-lock" ] || [ -d "$bin/.fingerprint" ]; then
+    case "$rest/" in
+        */../* | */./*)
+            echo "$bin: write the directory without \`.\` or \`..\` in what is yet to be made." >&2
+            echo "Nothing was installed." >&2
+            exit 1
+            ;;
+    esac
+    at=$(cd "$at" 2>/dev/null && pwd -P) || {
+        echo "$bin cannot be reached. Nothing was installed." >&2
+        exit 1
+    }
+    dest="${at%/}$rest"
+    if [ -e "$dest/.cargo-lock" ] || [ -d "$dest/.fingerprint" ]; then
         part_of "a directory cargo builds into"
     fi
-    case "$at$rest" in
+    case "$dest" in
         */releases/*[!0-9]*) ;;
         */releases/?*) part_of "a release's directory" ;;
     esac
-    if [ -e "$bin/release.json" ]; then
+    if [ -e "$dest/release.json" ]; then
         part_of "a release's directory"
     fi
-    while [ -n "$at" ]; do
+    while :; do
         [ ! -f "$at/ros/Makefile" ] || part_of "inside the Ayg checkout at $at"
         [ "$at" != "/" ] || break
         at=$(dirname "$at")
@@ -174,8 +193,8 @@ main() {
     # Put beside its place under a name of its own, seen to start on this machine, and only
     # then moved into its place: the `ayg` that is there is never half replaced, and never
     # replaced by one that does not run here.
-    mkdir -p "$bin"
-    new=$(mktemp "$bin/.ayg.XXXXXX")
+    mkdir -p "$dest"
+    new=$(mktemp "$dest/.ayg.XXXXXX")
     trap 'rm -rf "$tmp" "$new"' EXIT
     cp "$tmp/$file" "$new"
     chmod 755 "$new"
@@ -185,7 +204,7 @@ main() {
         echo "Nothing was installed: what was at $bin/ayg is as it was." >&2
         exit 1
     fi
-    mv -f "$new" "$bin/ayg"
+    mv -f "$new" "$dest/ayg"
     echo "✓ $version (${tag}) is at $bin/ayg"
 
     case ":$PATH:" in
