@@ -78,20 +78,33 @@ main() {
             exit 1
             ;;
     esac
-    at=$(cd "$at" 2>/dev/null && pwd -P) || {
+    # `cd -P`: each link followed where it stands, so that a `..` after one is the directory
+    # above what the link names, as the system reads the path, not above the link.
+    at=$(cd -P "$at" 2>/dev/null && pwd -P) || {
         echo "$bin cannot be reached. Nothing was installed." >&2
         exit 1
     }
     dest="${at%/}$rest"
+    [ -n "$dest" ] || dest=/
     if [ -e "$dest/.cargo-lock" ] || [ -d "$dest/.fingerprint" ]; then
         part_of "a directory cargo builds into"
     fi
-    case "$dest" in
-        */releases/*[!0-9]*) ;;
-        */releases/?*) part_of "a release's directory" ;;
+    # A release's, as `ayg` itself tells one: a numbered directory in one named `releases`,
+    # or a directory that holds a release's manifest.
+    case "$(basename "$dest")" in
+        "" | *[!0-9]*) ;;
+        *) [ "$(basename "$(dirname "$dest")")" != releases ] || part_of "a release's directory" ;;
     esac
     if [ -e "$dest/release.json" ]; then
         part_of "a release's directory"
+    fi
+    # And what is at the file's own place must be a file to replace, or nothing: a directory
+    # of that name (a checkout called Ayg, where names differ only by case) would take the
+    # new file inside itself.
+    if [ -d "$dest/ayg" ]; then
+        echo "$dest/ayg is a directory: an ayg cannot be put in its place." >&2
+        echo "Choose another directory (the default is ~/.local/bin). Nothing was installed." >&2
+        exit 1
     fi
     while :; do
         [ ! -f "$at/ros/Makefile" ] || part_of "inside the Ayg checkout at $at"
@@ -201,17 +214,19 @@ main() {
     if ! version=$("$new" --version 2>&1); then
         echo "The ayg that was fetched does not start on this machine:" >&2
         echo "  $version" >&2
-        echo "Nothing was installed: what was at $bin/ayg is as it was." >&2
+        echo "Nothing was installed: what was at $dest/ayg is as it was." >&2
         exit 1
     fi
     mv -f "$new" "$dest/ayg"
-    echo "✓ $version (${tag}) is at $bin/ayg"
+    echo "✓ $version (${tag}) is at $dest/ayg"
 
+    # By its whole path, here and in what is suggested: a PATH entry written from where this
+    # was run would name another directory from anywhere else.
     case ":$PATH:" in
-        *":$bin:"*) ;;
+        *":$dest:"* | *":$bin:"*) ;;
         *)
-            echo "  $bin is not on your PATH: add it (in ~/.profile or ~/.zshrc):"
-            echo "    export PATH=\"$bin:\$PATH\""
+            echo "  $dest is not on your PATH: add it (in ~/.profile or ~/.zshrc):"
+            echo "    export PATH=\"$dest:\$PATH\""
             ;;
     esac
     echo "  Next: \`ayg docs\` is the guide: aiming ayg at your robot, updating it, going back."
